@@ -4,10 +4,10 @@ import { z } from "zod";
 const identifierSchema = z
   .string()
   .trim()
-  .min(2, { message: "Telegram username ya UID daalein" })
-  .max(64, { message: "Bahut lamba hai" })
+  .min(2, { message: "Enter your Telegram username or UID" })
+  .max(64, { message: "That is too long" })
   .regex(/^@?[A-Za-z0-9_]{2,64}$/, {
-    message: "Sirf letters, numbers aur _ allowed hain",
+    message: "Only letters, numbers and _ are allowed",
   });
 
 function makeCode() {
@@ -34,7 +34,7 @@ export const startVerification = createServerFn({ method: "POST" })
       identifier_type: isNumeric ? "uid" : "username",
     });
 
-    if (error) throw new Error("Verification start nahi ho paya, dobara try karein");
+    if (error) throw new Error("Could not start verification, please try again");
 
     const botUsername = process.env["TELEGRAM_BOT_USERNAME"] || "ilnkbot";
     return {

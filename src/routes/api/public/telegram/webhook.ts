@@ -11,11 +11,37 @@ function safeEqual(a: string, b: string) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-async function sendMessage(token: string, chatId: number, text: string) {
+/** Public site URL: explicit env first, then Vercel-provided hosts, then the request origin. */
+function resolveSiteUrl(request: Request) {
+  const explicit = process.env["PUBLIC_SITE_URL"];
+  if (explicit) return explicit.replace(/\/$/, "");
+  const vercelProd = process.env["VERCEL_PROJECT_PRODUCTION_URL"];
+  if (vercelProd) return `https://${vercelProd}`;
+  const vercel = process.env["VERCEL_URL"];
+  if (vercel) return `https://${vercel}`;
+  return new URL(request.url).origin;
+}
+
+type ReplyMarkup = {
+  inline_keyboard: { text: string; url: string }[][];
+};
+
+async function sendMessage(
+  token: string,
+  chatId: number,
+  text: string,
+  replyMarkup?: ReplyMarkup,
+) {
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+    }),
   });
 }
 
@@ -31,6 +57,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
           return new Response("Unauthorized", { status: 401 });
         }
 
+        const siteUrl = resolveSiteUrl(request);
         const update = (await request.json()) as any;
         const message = update?.message ?? update?.edited_message;
         const text: string = message?.text ?? "";
@@ -43,7 +70,8 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
           await sendMessage(
             token,
             chatId,
-            "Verify karne ke liye website par apna username daalein aur wahan diye gaye link par click karein.",
+            "To verify, open the website, enter your Telegram username or UID, then tap the button you get there.",
+            { inline_keyboard: [[{ text: "Open website", url: siteUrl }]] },
           );
           return Response.json({ ok: true });
         }
@@ -57,17 +85,21 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
           .maybeSingle();
 
         if (!row) {
-          await sendMessage(token, chatId, "❌ Ye code valid nahi hai.");
+          await sendMessage(token, chatId, "❌ This code is not valid.");
           return Response.json({ ok: true });
         }
 
         if (row.status === "verified") {
-          await sendMessage(token, chatId, "✅ Ye code pehle hi verify ho chuka hai.");
+          await sendMessage(token, chatId, "✅ This code has already been verified.", {
+            inline_keyboard: [[{ text: "Go to website", url: siteUrl }]],
+          });
           return Response.json({ ok: true });
         }
 
         if (new Date(row.expires_at as string) < new Date()) {
-          await sendMessage(token, chatId, "⌛ Code expire ho gaya. Website par naya code lein.");
+          await sendMessage(token, chatId, "⌛ This code has expired. Get a new one on the website.", {
+            inline_keyboard: [[{ text: "Get a new code", url: siteUrl }]],
+          });
           return Response.json({ ok: true });
         }
 
@@ -91,7 +123,8 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
           await sendMessage(
             token,
             chatId,
-            "❌ Aapka Telegram account website par diye gaye username/UID se match nahi karta.",
+            "❌ Your Telegram account does not match the username/UID entered on the website.",
+            { inline_keyboard: [[{ text: "Try again", url: siteUrl }]] },
           );
           return Response.json({ ok: true });
         }
@@ -108,7 +141,16 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
           })
           .eq("id", row.id);
 
-        await sendMessage(token, chatId, "✅ Verification successful! Ab website par wapas jaayein.");
+        await sendMessage(
+          token,
+          chatId,
+          "✅ <b>Verification successful!</b>\nYour Telegram account is verified. Tap below to return to the site.",
+          {
+            inline_keyboard: [
+              [{ text: "🔗 Open the site", url: `${siteUrl}/?verified=${code}` }],
+            ],
+          },
+        );
         return Response.json({ ok: true });
       },
     },
