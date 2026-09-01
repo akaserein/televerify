@@ -48,7 +48,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
           return Response.json({ ok: true });
         }
 
-        const code = match[1];
+        const code = match[1]!;
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data: row } = await supabaseAdmin
           .from("telegram_verifications")
