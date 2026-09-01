@@ -6,11 +6,11 @@ import { startVerification, checkVerification } from "@/lib/telegram.functions";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Telegram Verification — @ilnkbot se account verify karein" },
+      { title: "Telegram Verification — Verify your account with @ilnkbot" },
       {
         name: "description",
         content:
-          "Apna Telegram username ya UID daalein, one-click bot link kholein aur seconds mein apna account verify karein.",
+          "Enter your Telegram username or UID, open the bot with one click, and verify your account in seconds.",
       },
       { property: "og:title", content: "Telegram Verification — @ilnkbot" },
       {
@@ -40,6 +40,14 @@ function Index() {
   );
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // If the user comes back from the bot's "Open the site" button, resume that code.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("verified");
+    if (!code) return;
+    setSession({ code, link: `https://t.me/ilnkbot?start=${code}` });
+    setPhase("waiting");
+  }, []);
+
   useEffect(() => {
     if (phase !== "waiting" || !session) return;
     timer.current = setInterval(async () => {
@@ -49,7 +57,7 @@ function Index() {
           setAccount({ username: res.username ?? null, userId: res.userId ?? null });
           setPhase("verified");
         } else if (res.status === "failed") {
-          setError(res.error ?? "Account match nahi hua");
+          setError(res.error ?? "Account did not match");
           setPhase("failed");
         } else if (res.status === "expired") {
           setPhase("expired");
@@ -72,7 +80,7 @@ function Index() {
       setSession({ code: res.code, link: res.link });
       setPhase("waiting");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Kuch galat ho gaya");
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setBusy(false);
     }
@@ -101,8 +109,8 @@ function Index() {
             Telegram Verification
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Apna Telegram username ya UID daalein aur ek click mein{" "}
-            <span className="font-medium text-foreground">@ilnkbot</span> se verify karein.
+            Enter your Telegram username or UID and verify with{" "}
+            <span className="font-medium text-foreground">@ilnkbot</span> in one click.
           </p>
         </div>
 
@@ -110,13 +118,13 @@ function Index() {
           {phase === "idle" && (
             <form onSubmit={handleStart} className="space-y-4">
               <label htmlFor="identifier" className="block text-sm font-medium text-foreground">
-                Telegram username ya UID
+                Telegram username or UID
               </label>
               <input
                 id="identifier"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="@username ya 123456789"
+                placeholder="@username or 123456789"
                 maxLength={64}
                 autoComplete="off"
                 className="w-full rounded-xl border border-input bg-secondary px-4 py-3 text-base text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/40"
@@ -127,7 +135,7 @@ function Index() {
                 disabled={busy || identifier.trim().length < 2}
                 className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
               >
-                {busy ? "Code ban raha hai…" : "Verification code banayein"}
+                {busy ? "Generating code…" : "Generate verification code"}
               </button>
             </form>
           )}
@@ -136,7 +144,7 @@ function Index() {
             <div className="space-y-5 text-center">
               <div className="rounded-2xl border border-dashed border-border bg-secondary px-4 py-5">
                 <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                  Aapka one-time code
+                  Your one-time code
                 </p>
                 <p className="mt-2 font-mono text-2xl font-bold tracking-[0.25em] text-foreground">
                   {session.code}
@@ -148,14 +156,14 @@ function Index() {
                 rel="noopener noreferrer"
                 className="block w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
               >
-                Bot kholein aur Start dabayein
+                Open the bot and press Start
               </a>
               <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <span className="h-2 w-2 animate-ping rounded-full bg-accent" />
-                Confirmation ka intezaar…
+                Waiting for confirmation…
               </p>
               <button onClick={reset} className="text-xs text-muted-foreground underline">
-                Cancel karein
+                Cancel
               </button>
             </div>
           )}
@@ -167,14 +175,14 @@ function Index() {
               </div>
               <h2 className="text-xl font-semibold text-foreground">Verified!</h2>
               <p className="text-sm text-muted-foreground">
-                {account?.username ? `@${account.username}` : "Account"}
-                {account?.userId ? ` · UID ${account.userId}` : ""} verify ho gaya hai.
+                {account?.username ? `@${account.username}` : "Your account"}
+                {account?.userId ? ` · UID ${account.userId}` : ""} has been verified.
               </p>
               <button
                 onClick={reset}
                 className="w-full rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground transition hover:bg-secondary"
               >
-                Naya verification
+                Start a new verification
               </button>
             </div>
           )}
@@ -185,25 +193,25 @@ function Index() {
                 {phase === "expired" ? "⌛" : "❌"}
               </div>
               <h2 className="text-xl font-semibold text-foreground">
-                {phase === "expired" ? "Code expire ho gaya" : "Verification fail"}
+                {phase === "expired" ? "Code expired" : "Verification failed"}
               </h2>
               <p className="text-sm text-muted-foreground">
                 {phase === "expired"
-                  ? "Code 15 minute tak valid rehta hai. Naya code banayein."
-                  : (error ?? "Telegram account diye gaye username/UID se match nahi hua.")}
+                  ? "Codes stay valid for 15 minutes. Please generate a new one."
+                  : (error ?? "Your Telegram account did not match the username/UID provided.")}
               </p>
               <button
                 onClick={reset}
                 className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
               >
-                Dobara koshish karein
+                Try again
               </button>
             </div>
           )}
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Code sirf 15 minute valid hota hai aur ek hi baar use hota hai.
+          Each code is valid for 15 minutes and can be used only once.
         </p>
       </section>
     </main>
